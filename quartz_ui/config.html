@@ -1,0 +1,152 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Quartz任务调度</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf8" />
+  <link href="css/bootstrap.min.css" rel="stylesheet" />
+  <link href="css/style.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="js/jquery.min.js"></script>
+  <script src="js/common.js" type="text/javascript" charset="utf8"></script>
+</head>
+
+<body>
+  <div class="navbar navbar-fixed-top">
+    <div class="navbar-inner">
+      <div class="container">
+        <a href="#" class="brand">任务调度</a>
+        <div class="nav-collapse">
+          <ul class="nav">
+            <li><a href="index.html">任务列表</a></li>
+            <li class="active"><a href="javascript:void(0)">任务配置</a></li>
+            <li><a href="log.html">日志</a></li>
+          </ul>
+          <div class="nav pull-right">
+            <a class="btn btn-primary" href="javascript:quartz.common.ajaxRequestForReset();">重置配置</a>
+            <a class="btn btn-primary" href="javascript:quartz.common.ajaxRequestForResetLog();">重置日志</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <h3>
+      任务配置
+    </h3>
+    <form id="form" method="post" autocomplete="off">
+      <table class="table table-bordered responsive-utilities" style="background-color: #fff">
+        <thead>
+          <tr>
+            <th width="250px" class="td_lable">主键<input type="hidden" name="Key" /></th>
+            <th id="data-Key"></th>
+          </tr>
+        </thead>
+        <tr>
+          <td class="td_lable">名称</td>
+          <td><input type="text" id="data-Name" name="Name" autofocus="autofocus" /></td>
+        </tr>
+        <tr>
+          <td class="td_lable">描述</td>
+          <td><textarea id="data-Description" name="Description" style="width:99%;height:120px;"></textarea></td>
+        </tr>
+        <tr>
+          <td class="td_lable"><a href="https://www.jianshu.com/p/b4b8950fb987" target="_blank">执行计划</a></td>
+          <td>
+            <input type="text" id="data-CronExpression" name="CronExpression" /><br />
+            每隔5秒执行一次：*/5 * * * * ?<br />
+            每隔1分钟执行一次：0 */1 * * * ?<br />
+            每天23点执行一次：0 0 23 * * ?<br />
+            每天凌晨1点执行一次：0 0 1 * * ?<br />
+            每月1号凌晨1点执行一次：0 0 1 1 * ?<br />
+            每月最后一天23点执行一次：0 0 23 L * ?<br />
+            每周星期天凌晨1点实行一次：0 0 1 ? * L<br />
+            在26分、29分、33分执行一次：0 26,29,33 * * * ?<br />
+            每天的0点、13点、18点、21点都执行一次：0 0 0,13,18,21 * * ?<br />
+            每天的7点到21点都执行一次：0 0 7-21 * * ?
+          </td>
+        </tr>
+        <tr>
+          <th class="td_lable">启用状态</th>
+          <th id="data-Status"></th>
+        </tr>
+        <tr>
+          <th class="td_lable">运行状态</th>
+          <th id="data-RunStatus"></th>
+        </tr>
+        <tr>
+          <th class="td_lable">最后运行时间</th>
+          <th id="data-LastRunTime"></th>
+        </tr>
+        <tr>
+          <th class="td_lable">错误信息</th>
+          <th id="data-ErrorMsg"></th>
+        </tr>
+      </table>
+
+      <button id="saveBtn" class="btn btn-primary" type="button">保存</button>
+    </form>
+  </div>
+  <footer class="footer">
+    <div class="container"></div>
+  </footer>
+  <script type="text/javascript">
+    $.namespace("quartz.config");
+    quartz.config = (function () {
+      var key = quartz.common.getUrlVar("key");
+      return {
+        init: function () {
+          $("#saveBtn").click(quartz.config.saveData);
+          quartz.config.getData();
+        },
+        getData: function () {
+          $.ajax({
+            type: "GET",
+            url: "api/GetTaskMasterByKey?key=" + key,
+            success: function (item) {
+              if (item) {
+                $('input[name=Key]').val(item.Key);
+                var ids = $("[id^=data-]");
+                for (var i = 0; i < ids.length; i++) {
+                  const el = $(ids[i]);
+                  var name = el.attr("id").replace("data-", "");
+
+                  if (name == "Status") {
+                    el.html('<span class="label ' + (item[name] == 1 ? "label-success" : "") + '">' + (item[name] == 1 ? "启用" : "禁用") + "</span>");
+                  } else if (name == "RunStatus") {
+                    el.html('<span class="badge ' + (item[name] == 0 ? "badge-success" : item[name] == 1 ? "badge-important" : "badge-info") + '">' +
+                      (item[name] == 0 ? "待执行" : item[name] == 1 ? "执行错误" : "正在执行") + "</span>");
+                  } else if (el.is('input') || el.is('textarea')) {
+                    el.val(item[name] == null ? "" : item[name]);
+                  } else {
+                    el.html(item[name] == null ? "" : item[name]);
+                  }
+                }
+              }
+            },
+            dataType: "json",
+          });
+        },
+        saveData: function () {
+          $.ajax({
+            type: "POST",
+            url: "api/SaveTaskMasterConfig",
+            data: $("#form").serialize(),
+            success: function (data) {
+              if ("success" == data) location.href = "index.html";
+              else {
+                alert(data)
+              }
+            },
+            dataType: "text",
+          });
+        }
+      };
+    })();
+
+    $(document).ready(function () {
+      quartz.config.init();
+    });
+  </script>
+</body>
+
+</html>

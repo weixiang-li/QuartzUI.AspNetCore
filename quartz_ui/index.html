@@ -1,0 +1,260 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Quartz任务调度</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf8" />
+  <link href="css/bootstrap.min.css" rel="stylesheet" />
+  <link href="css/style.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="js/jquery.min.js"></script>
+  <script src="js/common.js" type="text/javascript" charset="utf8"></script>
+</head>
+
+<body>
+  <div class="navbar navbar-fixed-top">
+    <div class="navbar-inner">
+      <div class="container">
+        <a href="#" class="brand">任务调度</a>
+        <div class="nav-collapse">
+          <ul class="nav">
+            <li class="active"><a href="index.html">任务列表</a></li>
+            <li><a href="log.html">日志</a></li>
+          </ul>
+          <div class="nav pull-right">
+            <a class="btn btn-primary" href="javascript:quartz.common.ajaxRequestForReset();">重置配置</a>
+            <a class="btn btn-primary" href="javascript:quartz.common.ajaxRequestForResetLog();">重置日志</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="container-fluid">
+    <div class="row-fluid">
+      <div class="span12">
+        <h3>
+          列表
+          <span class="pull-right" style="font-size: 16px; margin-right: 20px">
+            <label style="display: inline" for="refreshSecondsSelect">刷新间隔</label>
+            <select id="refreshSecondsSelect" class="refresh-seconds-select btn" style="width: 80px"
+              onchange="javascript:quartz.list.refreshSeconds=parseInt(this.options[this.options.selectedIndex].value);">
+              <option value="5" selected="selected">5秒</option>
+              <option value="10">10秒</option>
+              <option value="20">20秒</option>
+              <option value="30">30秒</option>
+              <option value="60">60秒</option>
+            </select>
+            <a id="btnSuspendRefresh" class="btn btn-primary"
+              href="javascript:quartz.list.switchSuspendRefresh();">暂停刷新</a>
+          </span>
+        </h3>
+        <table id="dataTable" class="table table-bordered table-striped responsive-utilities">
+          <thead>
+            <tr>
+              <th style="min-width: 40px;">N</th>
+              <th style="min-width: 100px;"><a id="th-Key">主键</a></th>
+              <th style="min-width: 100px;">
+                <a id="th-Name">名称</a>
+              </th>
+              <th style="min-width: 150px;">
+                <a id="th-Description">描述</a>
+              </th>
+              <th style="min-width: 100px;" title="Cron Expression">
+                <a id="th-CronExpression">执行计划</a>
+              </th>
+              <th style="min-width: 60px;">
+                <a id="th-Status">启用状态</a>
+              </th>
+              <th style="min-width: 60px;">
+                <a id="th-RunStatus">运行状态</a>
+              </th>
+              <th style="min-width: 120px;">
+                <a id="th-LastRunTime">最后运行时间</a>
+              </th>
+              <th style="min-width: 150px;">
+                <a id="th-ErrorMsg">错误信息</a>
+              </th>
+              <th style="min-width: 180px;">操作</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">
+    <div class="container"></div>
+  </footer>
+  <script type="text/javascript">
+    $.namespace("quartz.list");
+    quartz.list = (function () {
+      return {
+        init: function () {
+          quartz.list.controlRefresh();
+        },
+        controlRefresh: function () {
+          var FIVE = 5;
+          if (!quartz.list.refreshSeconds) {
+            quartz.list.refreshSeconds = FIVE;
+          }
+          if (!quartz.list.suspendedSeconds) {
+            quartz.list.suspendedSeconds = 0;
+          }
+          quartz.list.suspendedSeconds += FIVE;
+          if (!quartz.list.disableAutoRefresh) {
+            if (quartz.list.suspendedSeconds >= quartz.list.refreshSeconds) {
+              quartz.list.suspendedSeconds = 0;
+              quartz.list.getData();
+            }
+          }
+          setTimeout(quartz.list.controlRefresh, FIVE * 1000);
+        },
+        switchSuspendRefresh: function () {
+          quartz.list.disableAutoRefresh = !quartz.list.disableAutoRefresh;
+          if (quartz.list.disableAutoRefresh) {
+            $("#btnSuspendRefresh")
+              .addClass("btn-warning")
+              .removeClass("btn-primary");
+          } else {
+            $("#btnSuspendRefresh")
+              .addClass("btn-primary")
+              .removeClass("btn-warning");
+          }
+        },
+        disableAutoRefresh: false,
+        refreshSeconds: 5,
+        suspendedSeconds: 0,
+
+        getData: function () {
+          $.ajax({
+            type: "GET",
+            url: "api/GetTasks",
+            success: function (data) {
+              quartz.list.handleAjaxResult(data);
+            },
+            dataType: "json",
+          });
+        },
+
+        handleAjaxResult: function (data) {
+          if (data == null) return;
+
+          var statTable = document.getElementById("dataTable");
+          while (statTable.rows.length > 1) {
+            statTable.deleteRow(1);
+          }
+
+          var ths = $("thead th", statTable);
+          var html = "";
+          for (var i = 0; i < data.length; i++) {
+            var item = data[i];
+
+            html += "<tr>";
+            ths.each(function (index) {
+              var a = $("a", this);
+              if (a.length == 0) {
+                if (index == 0) {
+                  html += "<td>" + (i + 1) + "</td>";
+                } else {
+                  html += "<td>";
+                  if (item.Status == 1) {
+                    html +=
+                      '<a class="btn btn-warning" href="javascript:quartz.list.disableTask(\'' +
+                      item.Key +
+                      "');\">禁用任务</a>";
+                  } else {
+                    html +=
+                      '<a class="btn btn-primary" href="javascript:quartz.list.enableTask(\'' +
+                      item.Key +
+                      "');\">开启任务</a>";
+                  }
+                  if (item.RunStatus == 2) {
+                    html +=
+                      '<a style="margin-left: 5px" class="btn btn-warning" href="javascript:quartz.list.stopJob(\'' +
+                      item.Key +
+                      "');\">立即停止</a>";
+                  } else {
+                    html +=
+                      '<a style="margin-left: 5px" class="btn btn-primary" href="javascript:quartz.list.startJob(\'' +
+                      item.Key +
+                      "');\">立即执行</a>";
+                  }
+                  html += "</td>";
+                }
+              } else {
+                var key = a.attr("id").replace("th-", "");
+                if (key == "Status") {
+                  html +=
+                    '<td><span class="label ' + (item[key] == 1 ? "label-success" : "") + '">' +
+                    (item[key] == 1 ? "启用" : "禁用") + "</span></td>";
+                } else if (key == "RunStatus") {
+                  html +=
+                    '<td><span class="badge ' + (item[key] == 0 ? "badge-success" : item[key] == 1 ? "badge-important" : "badge-info") + '">' +
+                    (item[key] == 0 ? "待执行" : item[key] == 1 ? "执行错误" : "正在执行") +
+                    "</span></td>";
+                } else if (key == "Key") {
+                  html += '<td><a title="点击修改配置" href="config.html?key=' + item.Key + '">' + item.Key + "</a></td>";
+                } else {
+                  html += "<td>" + (item[key] == null ? "" : item[key]) + "</td>";
+                }
+              }
+            });
+            html += "</tr>";
+          }
+          $("#dataTable tbody").html(html);
+          quartz.common.stripes();
+        },
+
+        startJob: function (jobId) {
+          $.ajax({
+            type: "GET",
+            url: "api/StartJob?jobId=" + jobId,
+            success: function (data) {
+              data && alert(data);
+              setTimeout(quartz.list.getData, 50);
+            },
+            dataType: "text",
+          });
+        },
+        stopJob: function (jobId) {
+          $.ajax({
+            type: "GET",
+            url: "api/StopJob?jobId=" + jobId,
+            success: function (data) {
+              data && alert(data);
+              setTimeout(quartz.list.getData, 50);
+            },
+            dataType: "text",
+          });
+        },
+        enableTask: function (jobId) {
+          $.ajax({
+            type: "GET",
+            url: "api/EnableTask?jobId=" + jobId,
+            success: function (data) {
+              data && alert(data);
+              setTimeout(quartz.list.getData, 50);
+            },
+            dataType: "text",
+          });
+        },
+        disableTask: function (jobId) {
+          $.ajax({
+            type: "GET",
+            url: "api/DisableTask?jobId=" + jobId,
+            success: function (data) {
+              data && alert(data);
+              setTimeout(quartz.list.getData, 50);
+            },
+            dataType: "text",
+          });
+        },
+      };
+    })();
+
+    $(document).ready(function () {
+      quartz.list.init();
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,251 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Quartz任务调度</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf8" />
+  <link href="css/bootstrap.min.css" rel="stylesheet" />
+  <link href="css/style.css" type="text/css" rel="stylesheet" />
+  <script type="text/javascript" src="js/jquery.min.js"></script>
+  <script src="js/common.js" type="text/javascript" charset="utf8"></script>
+</head>
+
+<body>
+  <div class="navbar navbar-fixed-top">
+    <div class="navbar-inner">
+      <div class="container">
+        <a href="#" class="brand">任务调度</a>
+        <div class="nav-collapse">
+          <ul class="nav">
+            <li><a href="index.html">任务列表</a></li>
+            <li class="active"><a href="index.html">日志</a></li>
+          </ul>
+          <div class="nav pull-right">
+            <a class="btn btn-primary" href="javascript:quartz.common.ajaxRequestForReset();">重置配置</a>
+            <a class="btn btn-primary" href="javascript:quartz.common.ajaxRequestForResetLog();">重置日志</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="container-fluid">
+    <div class="row-fluid">
+      <div class="span12">
+        <h3>
+          列表
+          <span class="pull-right" style="font-size: 16px; margin-right: 20px">
+            <label style="display: inline" for="refreshKeySelect">过滤</label>
+            <select id="refreshKeySelect" class="btn"
+              onchange="javascript:quartz.log.key=this.options[this.options.selectedIndex].value;quartz.log.getData();">
+              <option value="">全部</option>
+            </select>
+            <label style="display: inline" for="refreshSecondsSelect">刷新间隔</label>
+            <select id="refreshSecondsSelect" class="refresh-seconds-select btn" style="width: 80px"
+              onchange="javascript:quartz.log.refreshSeconds=parseInt(this.options[this.options.selectedIndex].value);">
+              <option value="5" selected="selected">5秒</option>
+              <option value="10">10秒</option>
+              <option value="20">20秒</option>
+              <option value="30">30秒</option>
+              <option value="60">60秒</option>
+            </select>
+            <a id="btnSuspendRefresh" class="btn btn-primary"
+              href="javascript:quartz.log.switchSuspendRefresh();">暂停刷新</a>
+          </span>
+        </h3>
+        <table id="dataTable" class="table table-bordered table-striped responsive-utilities">
+          <thead>
+            <tr>
+              <th style="min-width: 50px;">N</th>
+              <th style="min-width: 120px;"><a id="th-Key">主键</a></th>
+              <th style="min-width: 100px;">
+                <a id="th-StartTime">开始时间</a>
+              </th>
+              <th style="min-width: 100px;">
+                <a id="th-EndTime">结束时间</a>
+              </th>
+              <th style="min-width: 80px;">
+                <a id="th-Status">运行状态</a>
+              </th>
+              <th style="min-width: 150px;">
+                <a id="th-Msg">信息</a>
+              </th>
+              <th style="min-width: 80px;">操作</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="pagination">
+          <ul>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer class="footer">
+    <div class="container"></div>
+  </footer>
+  <script type="text/javascript">
+    $.namespace("quartz.log");
+    quartz.log = (function () {
+      return {
+        init: function () {
+          quartz.log.getTask();
+          quartz.log.controlRefresh();
+        },
+        getTask: function () {
+          $.ajax({
+            type: "GET",
+            url: "api/GetTasks",
+            success: function (data) {
+              if (data != null) {
+                var keySelectEl = $('#refreshKeySelect');
+                for (var i = 0; i < data.length; i++) {
+                  keySelectEl.append("<option value='" + data[i].Key + "'>" + (data[i].Name || '') + ' ' + data[i].Key + "</option>");
+                }
+                keySelectEl.val(quartz.log.key);
+              }
+            },
+            dataType: "json",
+          });
+        },
+        controlRefresh: function () {
+          var FIVE = 5;
+          if (!quartz.log.refreshSeconds) {
+            quartz.log.refreshSeconds = FIVE;
+          }
+          if (!quartz.log.suspendedSeconds) {
+            quartz.log.suspendedSeconds = 0;
+          }
+          quartz.log.suspendedSeconds += FIVE;
+          if (!quartz.log.disableAutoRefresh) {
+            if (quartz.log.suspendedSeconds >= quartz.log.refreshSeconds) {
+              quartz.log.suspendedSeconds = 0;
+              quartz.log.getData();
+            }
+          }
+          setTimeout(quartz.log.controlRefresh, FIVE * 1000);
+        },
+        switchSuspendRefresh: function () {
+          quartz.log.disableAutoRefresh = !quartz.log.disableAutoRefresh;
+          if (quartz.log.disableAutoRefresh) {
+            $("#btnSuspendRefresh")
+              .addClass("btn-warning")
+              .removeClass("btn-primary");
+          } else {
+            $("#btnSuspendRefresh")
+              .addClass("btn-primary")
+              .removeClass("btn-warning");
+          }
+        },
+        disableAutoRefresh: false,
+        refreshSeconds: 5,
+        suspendedSeconds: 0,
+
+        key: quartz.common.getUrlVar("key"),
+        pageIndex: quartz.common.getUrlVar("pageIndex") || 1,
+        pageSize: quartz.common.getUrlVar("pageSize") || 100,
+        pageCount: 0,
+        getData: function () {
+          $.ajax({
+            type: "GET",
+            url: "api/GetTaskLogByKey?key=" + quartz.log.key + "&pageIndex=" + quartz.log.pageIndex + "&pageSize=" + quartz.log.pageSize,
+            success: function (data) {
+              quartz.log.handleAjaxResult(data);
+            },
+            dataType: "json",
+          });
+        },
+
+        handleAjaxResult: function (res) {
+          if (res == null) return;
+          quartz.log.pageIndex = res.PageIndex
+          quartz.log.pageSize = res.PageSize
+          quartz.log.pageCount = res.PageCount
+
+          var page = $('.pagination ul');
+          page.empty();
+          var prev = res.PageIndex > 1 ? ("?key=" + quartz.log.key + "&pageIndex=" + (res.PageIndex - 1) + "&pageSize=" + quartz.log.pageSize) : "javascript:void(0)"
+          $('<li><a href="' + prev + '">上一页</a></li>').addClass(res.PageIndex > 1 ? "" : "disabled").appendTo(page)
+          if (res.PageCount > 0) {
+            var arr = []
+            for (var i = 1; i <= res.PageCount; i++) {
+              arr.push(i);
+            }
+            while (arr.length > 17) {
+              if (arr.indexOf(res.PageIndex) >= 9) {
+                arr.splice(4, 1);
+              } else {
+                arr.splice(13, 1);
+              }
+            }
+            for (var i = 0; i < arr.length; i++) {
+              var cc = res.PageIndex != arr[i] ? ("?key=" + quartz.log.key + "&pageIndex=" + arr[i] + "&pageSize=" + quartz.log.pageSize) : "javascript:void(0)"
+              $('<li><a href="' + cc + '">' + arr[i] + '</a></li>').addClass(res.PageIndex == arr[i] ? "active" : "").appendTo(page)
+              if ((i + 1) < arr.length && (arr[i] + 1) != arr[i + 1]) {
+                $('<li><a href="javascript:void(0)">...</a></li>').addClass("disabled").appendTo(page)
+              }
+            }
+          }
+          var next = res.PageIndex < res.PageCount ? ("?key=" + quartz.log.key + "&pageIndex=" + (res.PageIndex + 1) + "&pageSize=" + quartz.log.pageSize) : "javascript:void(0)"
+          $('<li><a href="' + next + '">下一页</a></li>').addClass(res.PageIndex < res.PageCount ? "" : "disabled").appendTo(page)
+
+          var statTable = document.getElementById("dataTable");
+          while (statTable.rows.length > 1) {
+            statTable.deleteRow(1);
+          }
+
+          var ths = $("thead th", statTable);
+          var html = "";
+          for (var i = 0; i < res.Data.length; i++) {
+            var item = res.Data[i];
+
+            html += "<tr>";
+            ths.each(function (index) {
+              var a = $("a", this);
+              if (a.length == 0) {
+                if (index == 0) {
+                  html += "<td>" + (i + 1) + "</td>";
+                } else {
+                  html += '<td><a class="btn btn-warning" href="javascript:quartz.log.deleteTaskLogById(\'' + item.Id + "');\">删除</a></td>";
+                }
+              } else {
+                var key = a.attr("id").replace("th-", "");
+                if (key == "Status") {
+                  html += '<td><span class="label ' + (item[key] == 0 ? "label-important" : item[key] == 1 ? "label-warning" : "label-success") + '">' +
+                    (item[key] == 0 ? "异常" : item[key] == 1 ? "失败" : "成功") +
+                    "</span></td>";
+                } else {
+                  html += "<td>" + (item[key] == null ? "" : item[key]) + "</td>";
+                }
+              }
+            });
+            html += "</tr>";
+          }
+          $("#dataTable tbody").html(html);
+          quartz.common.stripes();
+        },
+
+        deleteTaskLogById: function (id) {
+          $.ajax({
+            type: "GET",
+            url: "api/DeleteTaskLogById?id=" + id,
+            success: function (data) {
+              if ("success" == data)
+                quartz.log.getData();
+              else {
+                alert(data)
+              }
+            },
+            dataType: "text",
+          });
+        }
+      };
+    })();
+
+    $(document).ready(function () {
+      quartz.log.init();
+    });
+  </script>
+</body>
+
+</html>
