@@ -265,7 +265,7 @@ namespace QuartzUI.AspNetCore.Extension
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Quartz服务错误");
-                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
 
@@ -324,7 +324,7 @@ namespace QuartzUI.AspNetCore.Extension
                 .Create()
                 .ForJob(JobKey.Create(master.Key))
                 .WithIdentity(master.Key)
-                .StartNow()
+                //.StartNow()
                 .WithCronSchedule(master.CronExpression)
                 .WithDescription(master.CronExpression)
                 .UsingJobData("Type", "定时任务")
